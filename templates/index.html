@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Cardiac Risk Prediction</title>
+    <link rel="icon" href="{{ url_for('static', filename='heart-icon.svg') }}" type="image/svg+xml">
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                    },
+                    colors: {
+                        medical: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            900: '#0c4a6e',
+                        },
+                        dark: {
+                            900: '#0B1120',
+                            800: '#111827',
+                            700: '#1F2937',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #0B1120; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+
+        /* Animated Background Mesh */
+        body {
+            background-color: #0f172a;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(236, 72, 153, 0.15) 0px, transparent 50%),
+                radial-gradient(at 0% 100%, rgba(14, 165, 233, 0.15) 0px, transparent 50%);
+            background-attachment: fixed;
+        }
+
+        /* Glassmorphism Classes */
+        .glass-card {
+            background: rgba(17, 24, 39, 0.6);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+        }
+        
+        .glass-input {
+            background: rgba(31, 41, 55, 0.5);
+            border: 1px solid rgba(75, 85, 99, 0.4);
+            transition: all 0.3s ease;
+        }
+        .glass-input:focus {
+            background: rgba(31, 41, 55, 0.8);
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+            outline: none;
+        }
+
+        /* Animations */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(59, 130, 246, 0.2); }
+            50% { box-shadow: 0 0 30px rgba(59, 130, 246, 0.5); }
+        }
+        .animate-pulse-glow { animation: pulse-glow 3s infinite; }
+
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
+        }
+        .animate-float { animation: float 6s ease-in-out infinite; }
+
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+            border-top-color: #38bdf8;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Custom UI Elements */
+        .percentage-pill {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.2);
+            color: #7dd3fc;
+            font-size: 0.65rem;
+            padding: 2px 8px;
+            border-radius: 999px;
+            letter-spacing: 0.5px;
+        }
+
+        .contribution-bar-bg {
+            background: rgba(255,255,255,0.05);
+            border-radius: 99px;
+            height: 6px;
+            overflow: hidden;
+        }
+        .contribution-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #22d3ee, #3b82f6);
+            border-radius: 99px;
+            transition: width 1s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Modal Transitions */
+        .modal { transition: opacity 0.3s ease, visibility 0.3s ease; }
+        .modal-content { transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        
+        /* Utility to ensure hidden works with custom styles */
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="text-slate-300 font-sans min-h-screen selection:bg-sky-500/30">
+
+    <div id="server-data" 
+         data-risk="{{ risk | default(0) }}" 
+         data-risk-category="{{ risk_category | default('N/A') }}"
+         data-reasons='{{ reasons | default([]) | tojson | safe }}'
+         data-scroll-to="{{ scroll_to | default('') }}"
+         style="display:none;">
+    </div>
+
+    <div class="container mx-auto max-w-7xl px-4 py-8 md:py-12">
+        
+        <header class="text-center mb-12 relative z-10">
+    <div class="inline-block p-1 rounded-2xl bg-gradient-to-r from-sky-500/20 to-indigo-500/20 mb-4 backdrop-blur-sm border border-white/5">
+        <span class="px-4 py-1.5 rounded-xl bg-dark-900/80 text-sky-400 text-xs font-bold tracking-wider uppercase">
+            Bayesian Network & SMOTE-Tomek
+        </span>
+    </div>
+    
+    <h1 class="text-4xl md:text-6xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white via-sky-200 to-indigo-300 mb-4 tracking-tight animate-float">
+        AI Cardiac Risk Prediction
+    </h1>
+    <p class="text-lg text-slate-400 max-w-2xl mx-auto font-light">
+        Analisis kesehatan jantung berbasis kecerdasan buatan dengan akurasi klinis tinggi. Masukkan data vital untuk mendapatkan estimasi risiko.
+    </p>
+    
+    <div class="absolute top-0 right-0 md:top-4 md:right-4 flex gap-3">
+        
+        <a href="/stats" target="_blank" class="group bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 p-3 rounded-xl transition-all duration-300 backdrop-blur-md flex items-center gap-2" title="Global Live Stats">
+            <span class="relative flex h-3 w-3">
+              <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-3 w-3 bg-rose-500"></span>
+            </span>
+            <span class="text-sm font-bold hidden md:inline">Live Stats</span>
+        </a>
+
+                <button id="load-button" class="group bg-white/5 hover:bg-white/10 border border-white/10 text-white p-3 rounded-xl transition-all duration-300 backdrop-blur-md" title="Load Data Pasien">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-sky-400 group-hover:scale-110 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+            <div class="lg:col-span-7 xl:col-span-8">
+                <div class="glass-card rounded-3xl p-6 md:p-8 relative overflow-hidden">
+                    <div class="absolute -top-20 -right-20 w-64 h-64 bg-sky-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                    <div class="flex items-center space-x-3 mb-8">
+                        <div class="p-2 bg-sky-500/20 rounded-lg">
+                            <svg class="w-6 h-6 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        </div>
+                        <h2 class="text-2xl font-bold text-white">Input Data Klinis</h2>
+                    </div>
+                    
+                    <form action="/predict" method="POST" id="prediction-form" class="space-y-8">
+                        
+                        <div class="group">
+                            <label for="Name" class="block text-sm font-medium text-slate-400 mb-2 ml-1">Nama Lengkap Pasien</label>
+                            <input type="text" name="Name" id="Name" required class="glass-input w-full rounded-xl p-4 text-white placeholder-slate-600 focus:placeholder-slate-500" placeholder="Masukkan nama pasien..." value="{{ form_data['Name'] if form_data else '' }}">
+                        </div>
+
+                        <div class="border-t border-white/5 pt-6">
+                            <h3 class="text-sm uppercase tracking-widest text-indigo-400 font-bold mb-4 flex items-center"><span class="w-2 h-2 rounded-full bg-indigo-500 mr-2"></span> Data Demografis</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Usia (Tahun) <span class="percentage-pill">{{ feature_importance['Age'] }}% Impact</span></label>
+                                    <input type="number" name="Age" id="Age" required class="glass-input w-full rounded-xl p-3.5 text-white" placeholder="0" value="{{ form_data['Age'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Jenis Kelamin <span class="percentage-pill">{{ feature_importance['Sex'] }}% Impact</span></label>
+                                    <div class="relative">
+                                        <select name="Sex" id="Sex" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="M" class="bg-gray-900" {% if form_data and form_data['Sex'] == 'M' %}selected{% endif %}>Laki-laki (M)</option>
+                                            <option value="F" class="bg-gray-900" {% if form_data and form_data['Sex'] == 'F' %}selected{% endif %}>Perempuan (F)</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-white/5 pt-6">
+                            <h3 class="text-sm uppercase tracking-widest text-sky-400 font-bold mb-4 flex items-center"><span class="w-2 h-2 rounded-full bg-sky-500 mr-2"></span> Tanda Vital & Lab</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Tekanan Darah (mmHg) <span class="percentage-pill">{{ feature_importance['RestingBP'] }}%</span></label>
+                                    <input type="number" name="RestingBP" id="RestingBP" required class="glass-input w-full rounded-xl p-3.5 text-white" placeholder="120" value="{{ form_data['RestingBP'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Kolesterol (mg/dl) <span class="percentage-pill">{{ feature_importance['Cholesterol'] }}%</span></label>
+                                    <input type="number" name="Cholesterol" id="Cholesterol" required class="glass-input w-full rounded-xl p-3.5 text-white" placeholder="200" value="{{ form_data['Cholesterol'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Detak Jantung Maks <span class="percentage-pill">{{ feature_importance['MaxHR'] }}%</span></label>
+                                    <input type="number" name="MaxHR" id="MaxHR" required class="glass-input w-full rounded-xl p-3.5 text-white" placeholder="150" value="{{ form_data['MaxHR'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Gula Darah > 120? <span class="percentage-pill">{{ feature_importance['FastingBS'] }}%</span></label>
+                                    <div class="relative">
+                                        <select name="FastingBS" id="FastingBS" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="0" class="bg-gray-900" {% if form_data and form_data['FastingBS'] == '0' %}selected{% endif %}>Tidak (Normal)</option>
+                                            <option value="1" class="bg-gray-900" {% if form_data and form_data['FastingBS'] == '1' %}selected{% endif %}>Ya (Tinggi)</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-white/5 pt-6">
+                            <h3 class="text-sm uppercase tracking-widest text-rose-400 font-bold mb-4 flex items-center"><span class="w-2 h-2 rounded-full bg-rose-500 mr-2"></span> Analisis EKG & Jantung</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Tipe Nyeri Dada <span class="percentage-pill">{{ feature_importance['ChestPainType'] }}%</span></label>
+                                    <div class="relative">
+                                        <select name="ChestPainType" id="ChestPainType" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="TA" class="bg-gray-900" {% if form_data and form_data['ChestPainType'] == 'TA' %}selected{% endif %}>Typical Angina</option>
+                                            <option value="ATA" class="bg-gray-900" {% if form_data and form_data['ChestPainType'] == 'ATA' %}selected{% endif %}>Atypical Angina</option>
+                                            <option value="NAP" class="bg-gray-900" {% if form_data and form_data['ChestPainType'] == 'NAP' %}selected{% endif %}>Non-Anginal Pain</option>
+                                            <option value="ASY" class="bg-gray-900" {% if form_data and form_data['ChestPainType'] == 'ASY' %}selected{% endif %}>Asymptomatic</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Hasil EKG Istirahat <span class="percentage-pill">{{ feature_importance['RestingECG'] }}%</span></label>
+                                    <div class="relative">
+                                        <select name="RestingECG" id="RestingECG" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="Normal" class="bg-gray-900" {% if form_data and form_data['RestingECG'] == 'Normal' %}selected{% endif %}>Normal</option>
+                                            <option value="ST" class="bg-gray-900" {% if form_data and form_data['RestingECG'] == 'ST' %}selected{% endif %}>ST-T Wave Abnormal</option>
+                                            <option value="LVH" class="bg-gray-900" {% if form_data and form_data['RestingECG'] == 'LVH' %}selected{% endif %}>Left Ventricular Hypertrophy</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Angina Saat Olahraga <span class="percentage-pill">{{ feature_importance['ExerciseAngina'] }}%</span></label>
+                                    <div class="relative">
+                                        <select name="ExerciseAngina" id="ExerciseAngina" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="N" class="bg-gray-900" {% if form_data and form_data['ExerciseAngina'] == 'N' %}selected{% endif %}>Tidak</option>
+                                            <option value="Y" class="bg-gray-900" {% if form_data and form_data['ExerciseAngina'] == 'Y' %}selected{% endif %}>Ya</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">ST Slope <span class="percentage-pill">{{ feature_importance['ST_Slope'] }}%</span></label>
+                                    <div class="relative">
+                                        <select name="ST_Slope" id="ST_Slope" required class="glass-input w-full rounded-xl p-3.5 text-white appearance-none cursor-pointer">
+                                            <option value="Up" class="bg-gray-900" {% if form_data and form_data['ST_Slope'] == 'Up' %}selected{% endif %}>Upsloping (Naik)</option>
+                                            <option value="Flat" class="bg-gray-900" {% if form_data and form_data['ST_Slope'] == 'Flat' %}selected{% endif %}>Flat (Datar)</option>
+                                            <option value="Down" class="bg-gray-900" {% if form_data and form_data['ST_Slope'] == 'Down' %}selected{% endif %}>Downsloping (Turun)</option>
+                                        </select>
+                                        <div class="absolute right-4 top-4 pointer-events-none text-slate-500">▼</div>
+                                    </div>
+                                </div>
+                                <div class="md:col-span-2">
+                                    <label class="flex justify-between text-sm font-medium text-slate-400 mb-2">Oldpeak (Depresi ST) <span class="percentage-pill">{{ feature_importance['Oldpeak'] }}%</span></label>
+                                    <input type="number" step="0.1" name="Oldpeak" id="Oldpeak" required class="glass-input w-full rounded-xl p-3.5 text-white" placeholder="Contoh: 1.2" value="{{ form_data['Oldpeak'] if form_data else '' }}">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="border-t border-white/5 pt-6 bg-white/5 rounded-2xl p-4 md:p-6">
+                            <h3 class="text-sm uppercase tracking-widest text-emerald-400 font-bold mb-4 flex items-center"><span class="w-2 h-2 rounded-full bg-emerald-500 mr-2"></span> Gaya Hidup (AI Support)</h3>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Tinggi (cm)</label>
+                                    <input type="number" name="Height" id="Height" class="glass-input w-full rounded-lg p-2.5 text-sm text-white" placeholder="170" value="{{ form_data['Height'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Berat (kg)</label>
+                                    <input type="number" name="Weight" id="Weight" class="glass-input w-full rounded-lg p-2.5 text-sm text-white" placeholder="70" value="{{ form_data['Weight'] if form_data else '' }}">
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Riwayat Keluarga</label>
+                                    <select name="FamilyHistory" id="FamilyHistory" class="glass-input w-full rounded-lg p-2.5 text-sm text-white appearance-none">
+                                        <option value="Tidak" class="bg-gray-900" {% if form_data and form_data['FamilyHistory'] == 'Tidak' %}selected{% endif %}>Tidak</option>
+                                        <option value="Ya" class="bg-gray-900" {% if form_data and form_data['FamilyHistory'] == 'Ya' %}selected{% endif %}>Ya</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Status Merokok</label>
+                                    <select name="SmokingStatus" id="SmokingStatus" class="glass-input w-full rounded-lg p-2.5 text-sm text-white appearance-none">
+                                        <option value="Tidak Pernah" class="bg-gray-900" {% if form_data and form_data['SmokingStatus'] == 'Tidak Pernah' %}selected{% endif %}>Tidak Pernah</option>
+                                        <option value="Mantan Perokok" class="bg-gray-900" {% if form_data and form_data['SmokingStatus'] == 'Mantan Perokok' %}selected{% endif %}>Mantan Perokok</option>
+                                        <option value="Perokok Aktif" class="bg-gray-900" {% if form_data and form_data['SmokingStatus'] == 'Perokok Aktif' %}selected{% endif %}>Perokok Aktif</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Alkohol</label>
+                                    <select name="AlcoholIntake" id="AlcoholIntake" class="glass-input w-full rounded-lg p-2.5 text-sm text-white appearance-none">
+                                        <option value="Tidak Pernah" class="bg-gray-900" {% if form_data and form_data['AlcoholIntake'] == 'Tidak Pernah' %}selected{% endif %}>Tidak Pernah</option>
+                                        <option value="Jarang" class="bg-gray-900" {% if form_data and form_data['AlcoholIntake'] == 'Jarang' %}selected{% endif %}>Jarang</option>
+                                        <option value="Rutin" class="bg-gray-900" {% if form_data and form_data['AlcoholIntake'] == 'Rutin' %}selected{% endif %}>Rutin</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-slate-400 mb-1">Aktivitas Fisik</label>
+                                    <select name="PhysicalActivity" id="PhysicalActivity" class="glass-input w-full rounded-lg p-2.5 text-sm text-white appearance-none">
+                                        <option value="Jarang" class="bg-gray-900" {% if form_data and form_data['PhysicalActivity'] == 'Jarang' %}selected{% endif %}>Jarang</option>
+                                        <option value="Sedang" class="bg-gray-900" {% if form_data and form_data['PhysicalActivity'] == 'Sedang' %}selected{% endif %}>Sedang</option>
+                                        <option value="Aktif" class="bg-gray-900" {% if form_data and form_data['PhysicalActivity'] == 'Aktif' %}selected{% endif %}>Aktif</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="w-full relative group overflow-hidden rounded-xl p-[2px]">
+                            <div class="absolute inset-0 bg-gradient-to-r from-sky-500 to-indigo-500 animate-pulse-glow"></div>
+                            <div class="relative bg-dark-900 group-hover:bg-opacity-0 transition-all duration-300 rounded-[10px] h-full">
+                                <div class="flex items-center justify-center py-4 text-white font-bold text-lg tracking-wide group-hover:scale-105 transition-transform">
+                                    <svg class="w-6 h-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                    Jalankan Prediksi AI
+                                </div>
+                            </div>
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div class="lg:col-span-5 xl:col-span-4 space-y-8">
+                
+                <div id="result" class="glass-card rounded-3xl p-6 md:p-8 min-h-[500px] flex flex-col items-center justify-center relative">
+                    
+                    {% if risk is defined %}
+                        <div class="relative w-72 h-72 flex items-center justify-center mb-8">
+                            <div class="absolute inset-0 rounded-full border-4 border-slate-700/30"></div>
+                            <div class="absolute inset-0 rounded-full border-4 {{ risk_color }} border-opacity-20 animate-ping" style="animation-duration: 3s;"></div>
+                            
+                            <div class="relative z-10 w-64 h-64 rounded-full glass-card flex flex-col items-center justify-center shadow-2xl shadow-sky-500/10 border-2 {{ 'border-red-500/50 shadow-red-500/20' if risk > 50 else 'border-sky-500/50' }}">
+                                <span class="text-sm uppercase tracking-widest text-slate-400 mb-1">Probabilitas</span>
+                                <div class="text-7xl font-extrabold {{ risk_color }} tracking-tighter drop-shadow-lg">
+                                    {{ "%.0f"|format(risk) }}<span class="text-4xl align-top opacity-80">%</span>
+                                </div>
+                                <div class="mt-2 px-3 py-1 rounded-full bg-dark-900/80 border border-white/10 text-sm font-semibold {{ risk_color }}">
+                                    {% if risk > 70 %}Sangat Tinggi
+                                    {% elif risk > 40 %}Menengah
+                                    {% else %}Rendah{% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if feature_contributions %}
+                        <div class="w-full mb-8">
+                            <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">Top Kontributor Risiko</h3>
+                            <div class="space-y-3">
+                                {% for feature, contribution in feature_contributions.items() %}
+                                    {% if loop.index <= 4 %} 
+                                    <div class="group">
+                                        <div class="flex justify-between text-xs font-medium mb-1">
+                                            <span class="text-slate-300 group-hover:text-white transition-colors">{{ feature }}</span>
+                                            <span class="text-sky-400">{{ "%.0f"|format(contribution * 100) }}%</span>
+                                        </div>
+                                        <div class="contribution-bar-bg">
+                                            <div class="contribution-fill" data-width="{{ contribution * 100 }}"></div>
+                                        </div>
+                                    </div>
+                                    {% endif %}
+                                {% endfor %}
+                                <div class="text-center pt-2">
+                                    <button class="text-xs text-sky-500 hover:text-sky-400 transition-colors" onclick="document.getElementById('full-details-modal').classList.remove('hidden')">Lihat Analisis Detail</button>
+                                </div>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <div class="w-full bg-white/5 rounded-2xl p-4 mb-6 border border-white/5">
+                            <h3 class="text-sm font-bold text-white mb-3 flex items-center">
+                                <svg class="w-4 h-4 mr-2 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                                Faktor Utama
+                            </h3>
+                            <ul class="space-y-2">
+                                {% for reason in reasons %}
+                                    <li class="flex items-start text-xs text-slate-300 leading-relaxed">
+                                        <span class="mr-2 text-rose-500">•</span> {{ reason }}
+                                    </li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3 w-full mb-6">
+                            <button type="button" id="save-button" class="bg-emerald-600/90 hover:bg-emerald-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center">
+                                <svg class="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> Simpan
+                            </button>
+                            <button type="button" id="export-pdf-button" class="bg-indigo-600/90 hover:bg-indigo-500 text-white font-semibold py-3 px-4 rounded-xl shadow-lg transition-all active:scale-95 flex items-center justify-center">
+                                <svg class="w-5 h-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> PDF
+                            </button>
+                        </div>
+                        <p id="save-status" class="text-xs text-center text-emerald-400 font-medium"></p>
+
+                        <form id="save-form" style="display:none;">
+                            <input type="hidden" name="Name" value="{{ form_data['Name'] }}">
+                            <input type="hidden" name="Age" value="{{ form_data['Age'] }}">
+                            <input type="hidden" name="Sex" value="{{ form_data['Sex'] }}">
+                            <input type="hidden" name="ChestPainType" value="{{ form_data['ChestPainType'] }}">
+                            <input type="hidden" name="RestingBP" value="{{ form_data['RestingBP'] }}">
+                            <input type="hidden" name="Cholesterol" value="{{ form_data['Cholesterol'] }}">
+                            <input type="hidden" name="FastingBS" value="{{ form_data['FastingBS'] }}">
+                            <input type="hidden" name="RestingECG" value="{{ form_data['RestingECG'] }}">
+                            <input type="hidden" name="MaxHR" value="{{ form_data['MaxHR'] }}">
+                            <input type="hidden" name="ExerciseAngina" value="{{ form_data['ExerciseAngina'] }}">
+                            <input type="hidden" name="Oldpeak" value="{{ form_data['Oldpeak'] }}">
+                            <input type="hidden" name="ST_Slope" value="{{ form_data['ST_Slope'] }}">
+                            <input type="hidden" name="LastRiskPercentage" value="{{ risk }}">
+                            <input type="hidden" name="Height" value="{{ form_data['Height'] }}">
+                            <input type="hidden" name="Weight" value="{{ form_data['Weight'] }}">
+                            <input type="hidden" name="FamilyHistory" value="{{ form_data['FamilyHistory'] }}">
+                            <input type="hidden" name="SmokingStatus" value="{{ form_data['SmokingStatus'] }}">
+                            <input type="hidden" name="AlcoholIntake" value="{{ form_data['AlcoholIntake'] }}">
+                            <input type="hidden" name="PhysicalActivity" value="{{ form_data['PhysicalActivity'] }}">
+                        </form>
+
+                        <div id="gemini-advice-container" class="w-full border-t border-white/10 pt-6 mt-2">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 flex items-center">
+                                    <span class="text-2xl mr-2">🤖</span> Gemini Medical
+                                </h3>
+                                <select id="gemini-model-selector" class="bg-dark-900 border border-white/10 text-slate-300 text-xs rounded-lg p-2 max-w-[140px] focus:ring-2 focus:ring-purple-500">
+                                    <option value="gemini-2.0-flash" selected>Gemini 2.0 Flash</option>
+                                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                                    <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash Lite</option>
+                                    <option value="gemini-2.0-flash-001">Gemini 2.0 Flash 001</option>
+                                    <option value="gemma-3-4b-it">Gemma 3 (4B)</option>
+                                    <option value="gemma-3-27b-it">Gemma 3 (27B)</option>
+                                </select>
+                            </div>
+                            
+                            <button type="button" id="generate-advice-button" class="w-full bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white font-bold py-3 px-4 rounded-xl shadow-lg transition-all duration-300 relative overflow-hidden group">
+                                <span class="relative z-10 flex items-center justify-center">
+                                    <svg class="w-5 h-5 mr-2 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                    Analisis & Solusi Penurunan Risiko
+                                </span>
+                            </button>
+                            
+                            <div id="gemini-loading" class="hidden flex-col items-center justify-center mt-6 p-4 bg-white/5 rounded-xl border border-white/5">
+                                <div class="spinner w-8 h-8 mb-3"></div>
+                                <p class="text-sm text-slate-400 animate-pulse">AI sedang menganalisis data klinis...</p>
+                            </div>
+                            
+                            <p id="gemini-error" class="text-red-400 text-xs mt-3 text-center"></p>
+                            
+                            <div id="gemini-response" class="mt-4 p-5 bg-dark-900/80 border border-purple-500/20 rounded-xl text-slate-300 text-sm leading-relaxed shadow-inner hidden empty:hidden"></div>
+                        </div>
+
+                        <div id="hospital-finder-container" class="w-full border-t border-white/10 pt-6 mt-4 text-center">
+                            <button type="button" id="find-hospital-button" class="text-sky-400 hover:text-white text-sm font-medium transition-colors flex items-center justify-center mx-auto">
+                                <svg class="w-4 h-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                                Cari Faskes Kardiologi Terdekat
+                            </button>
+                            <p id="hospital-status" class="text-xs text-sky-300 mt-2"></p>
+                        </div>
+
+                    {% elif error %}
+                        <div class="text-center p-8">
+                            <div class="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto mb-4 border border-red-500/20">
+                                <svg class="w-10 h-10 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-red-400">Sistem Error</h2>
+                            <p class="text-slate-400 mt-2">{{ error }}</p>
+                            <a href="/" class="inline-block mt-4 text-sm text-white bg-slate-700 px-4 py-2 rounded-lg hover:bg-slate-600">Refresh Halaman</a>
+                        </div>
+                    
+                    {% else %}
+                        <div class="text-center p-8 opacity-60">
+                            <div class="w-24 h-24 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+                                <svg class="w-12 h-12 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                            </div>
+                            <h2 class="text-2xl font-bold text-white mb-2">Menunggu Data</h2>
+                            <p class="text-slate-400 max-w-xs mx-auto text-sm">Silakan lengkapi formulir klinis di sebelah kiri untuk memulai analisis prediksi.</p>
+                        </div>
+                    {% endif %}
+                </div>
+
+                <div class="text-center md:text-right text-xs text-slate-600 pt-4">
+                    <p>Sistem ini menggunakan model probabilistic.</p>
+                    <p>Tidak menggantikan diagnosis medis profesional.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="load-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm bg-black/60">
+        <div class="modal-content glass-card w-full max-w-lg p-0 rounded-2xl transform scale-95 shadow-2xl border border-white/10 bg-dark-900">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <h2 class="text-xl font-bold text-white flex items-center">
+                    <svg class="w-5 h-5 mr-2 text-sky-400" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4"></path></svg>
+                    Database Pasien
+                </h2>
+                <button id="close-modal-button" class="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-lg p-1">
+                    <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="user-list-container" class="p-6 max-h-[400px] overflow-y-auto space-y-3">
+                </div>
+        </div>
+    </div>
+
+    <div id="full-details-modal" class="modal fixed inset-0 z-50 flex items-center justify-center p-4 hidden backdrop-blur-sm bg-black/60 transition-opacity duration-300">
+        <div class="modal-content glass-card w-full max-w-md p-0 rounded-2xl shadow-2xl border border-white/10 bg-dark-900 transform scale-100">
+            <div class="p-5 border-b border-white/5 flex justify-between items-center bg-white/5">
+                <h2 class="text-lg font-bold text-white">Analisis Fitur Lengkap</h2>
+                <button onclick="document.getElementById('full-details-modal').classList.add('hidden')" class="text-slate-400 hover:text-white transition-colors bg-white/5 hover:bg-white/10 rounded-lg p-1">
+                    <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-5 max-h-[60vh] overflow-y-auto space-y-4">
+                {% if feature_contributions %}
+                    {% for feature, contribution in feature_contributions.items() %}
+                    <div class="group">
+                        <div class="flex justify-between text-xs font-medium mb-1">
+                            <span class="text-slate-300">{{ feature }}</span>
+                            <span class="text-sky-400">{{ "%.1f"|format(contribution * 100) }}%</span>
+                        </div>
+                        <div class="contribution-bar-bg">
+                            <div class="contribution-fill" data-width="{{ contribution * 100 }}" style="width: 0%"></div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <p class="text-slate-500 text-center text-sm">Data tidak tersedia.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- READ SERVER DATA FROM DOM ---
+        const dataElement = document.getElementById('server-data');
+        const SERVER_DATA = {
+            risk: parseFloat(dataElement.dataset.risk),
+            riskCategory: dataElement.dataset.riskCategory,
+            reasons: JSON.parse(dataElement.dataset.reasons || '[]'),
+            scrollTo: dataElement.dataset.scrollTo
+        };
+
+        let currentAIAdvice = '';
+
+        document.addEventListener('DOMContentLoaded', function() {
+            
+            // --- ANIMATE CONTRIBUTION BARS ---
+            const bars = document.querySelectorAll('.contribution-fill');
+            bars.forEach(bar => {
+                const width = bar.getAttribute('data-width');
+                if(width) {
+                    setTimeout(() => {
+                        bar.style.width = width + '%';
+                    }, 500);
+                }
+            });
+            
+            // Show response div if content exists
+            const geminiResponse = document.getElementById('gemini-response');
+            if(geminiResponse && geminiResponse.innerHTML.trim() !== "") {
+                geminiResponse.classList.remove('hidden');
+            }
+
+            // --- AUTO SCROLL ---
+            if (SERVER_DATA.scrollTo) {
+                const targetElement = document.getElementById(SERVER_DATA.scrollTo);
+                if (targetElement) {
+                    targetElement.scrollIntoView({ behavior: 'smooth' });
+                }
+            }
+
+            // --- 1. TOMBOL SIMPAN ---
+            var saveButton = document.getElementById('save-button');
+            if (saveButton) {
+                saveButton.addEventListener('click', async function() {
+                    var saveForm = document.getElementById('save-form');
+                    var formData = new FormData(saveForm);
+                    var saveStatus = document.getElementById('save-status');
+
+                    saveButton.disabled = true;
+                    var originalText = saveButton.innerHTML;
+                    saveButton.innerHTML = 'Menyimpan...';
+
+                    try {
+                        var response = await fetch('/save_info', {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        var result = await response.json();
+                        
+                        if (response.ok) {
+                            saveButton.innerHTML = '✓ Tersimpan';
+                            saveButton.classList.remove('bg-emerald-600/90');
+                            saveButton.classList.add('bg-slate-600');
+                            saveStatus.textContent = result.message;
+                        } else {
+                            throw new Error(result.message);
+                        }
+                    } catch (error) {
+                        saveButton.disabled = false;
+                        saveButton.innerHTML = originalText;
+                        saveStatus.textContent = 'Error: ' + error.message;
+                        saveStatus.classList.replace('text-emerald-400', 'text-red-400');
+                    }
+                });
+            }
+
+            // --- 2. TOMBOL EXPORT PDF ---
+            var exportPdfButton = document.getElementById('export-pdf-button');
+            if (exportPdfButton) {
+                exportPdfButton.addEventListener('click', async function() {
+                    var saveForm = document.getElementById('save-form');
+                    var formData = new FormData(saveForm);
+                    
+                    var data = {};
+                    formData.forEach(function(value, key) {
+                        data[key] = value;
+                    });
+                    
+                    // Use safe variables
+                    data.risk = SERVER_DATA.risk;
+                    data.risk_category = SERVER_DATA.riskCategory;
+                    data.reasons = SERVER_DATA.reasons;
+                    data.ai_advice = currentAIAdvice;
+
+                    exportPdfButton.disabled = true;
+                    var originalText = exportPdfButton.innerHTML;
+                    exportPdfButton.innerHTML = 'Generating...';
+
+                    try {
+                        var response = await fetch('/export_report', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        });
+
+                        if (!response.ok) throw new Error('Export failed');
+
+                        var blob = await response.blob();
+                        var url = window.URL.createObjectURL(blob);
+                        var a = document.createElement('a');
+                        a.href = url;
+                        a.download = 'Laporan_Medis_' + data.Name + '_' + new Date().getTime() + '.pdf';
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+
+                        exportPdfButton.innerHTML = '✓ Downloaded';
+                        setTimeout(function() {
+                            exportPdfButton.innerHTML = originalText;
+                            exportPdfButton.disabled = false;
+                        }, 2000);
+
+                    } catch (error) {
+                        alert('Error: ' + error.message);
+                        exportPdfButton.innerHTML = originalText;
+                        exportPdfButton.disabled = false;
+                    }
+                });
+            }
+            
+            // --- 3. MODAL LOAD (Logic Only) ---
+            var loadButton = document.getElementById('load-button');
+            var loadModal = document.getElementById('load-modal');
+            var modalContent = loadModal.querySelector('.modal-content');
+            var closeModalButton = document.getElementById('close-modal-button');
+            var userListContainer = document.getElementById('user-list-container');
+            
+            loadButton.addEventListener('click', async function() {
+                loadModal.classList.remove('hidden', 'pointer-events-none', 'opacity-0'); // Show modal
+                modalContent.classList.remove('scale-95');
+                
+                userListContainer.innerHTML = '<p class="text-center text-slate-400 py-8">Loading data...</p>';
+                
+                try {
+                    var response = await fetch('/get_saved_users');
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    
+                    var users = await response.json();
+                    
+                    if (users.length === 0) {
+                        userListContainer.innerHTML = '<div class="text-center py-8"><p class="text-slate-400 mb-2">Belum ada data pasien.</p><p class="text-xs text-slate-500">Lakukan prediksi dan simpan data terlebih dahulu.</p></div>';
+                        return;
+                    }
+                    
+                    var userHtml = '';
+                    users.forEach(function(user) {
+                        var riskColor = "text-emerald-400";
+                        if (user.LastRiskPercentage > 70) riskColor = "text-rose-400";
+                        else if (user.LastRiskPercentage > 40) riskColor = "text-yellow-400";
+                        
+                        userHtml += 
+                            '<div class="flex justify-between items-center bg-white/5 hover:bg-white/10 border border-white/5 p-4 rounded-xl transition-colors group">' +
+                                '<div>' +
+                                    '<div class="font-bold text-white group-hover:text-sky-300 transition-colors">' + user.Name + '</div>' +
+                                    '<div class="text-xs font-mono mt-1 ' + riskColor + '">Risk Level: ' + user.LastRiskPercentage + '%</div>' +
+                                '</div>' +
+                                '<div class="flex space-x-2">' +
+                                    '<button onclick="loadUserData(' + user.id + ')" class="bg-sky-600 hover:bg-sky-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">Load</button>' +
+                                    '<button onclick="deleteUserData(' + user.id + ', this)" class="bg-rose-600/80 hover:bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition-colors">Hapus</button>' +
+                                '</div>' +
+                            '</div>';
+                    });
+                    userListContainer.innerHTML = userHtml;
+                    
+                } catch (error) {
+                    userListContainer.innerHTML = '<p class="text-center text-rose-400 py-4">Error: ' + error.message + '</p>';
+                }
+            });
+
+            function closeModal() {
+                modalContent.classList.add('scale-95');
+                loadModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => loadModal.classList.add('hidden'), 300); // Hide after transition
+            }
+            
+            closeModalButton.addEventListener('click', closeModal);
+            loadModal.addEventListener('click', function(e) {
+                if (e.target === loadModal) closeModal();
+            });
+
+            // --- 4. GEMINI AI ---
+            var geminiButton = document.getElementById('generate-advice-button');
+            if (geminiButton) {
+                var modelSelector = document.getElementById('gemini-model-selector');
+                var loadingSpinner = document.getElementById('gemini-loading');
+                var responseDiv = document.getElementById('gemini-response');
+                var errorDiv = document.getElementById('gemini-error');
+                
+                var currentGeminiModel = modelSelector.value;
+                modelSelector.addEventListener('change', function() {
+                    currentGeminiModel = modelSelector.value;
+                });
+
+                geminiButton.addEventListener('click', async function() {
+                    loadingSpinner.classList.remove('hidden');
+                    loadingSpinner.classList.add('flex');
+                    responseDiv.innerHTML = '';
+                    responseDiv.classList.add('hidden');
+                    errorDiv.textContent = '';
+                    geminiButton.disabled = true;
+                    var originalText = geminiButton.innerHTML;
+                    geminiButton.innerHTML = 'AI Sedang Menganalisis...';
+
+                    try {
+                        var form = document.getElementById('prediction-form');
+                        var formData = new FormData(form);
+                        var formDataObject = {};
+                        formData.forEach(function(value, key) {
+                            formDataObject[key] = value;
+                        });
+                        
+                        var saveForm = document.getElementById('save-form');
+                        formDataObject.LastRiskPercentage = new FormData(saveForm).get('LastRiskPercentage');
+
+                        var response = await fetch('/get_gemini_advice', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                formData: formDataObject,
+                                model: currentGeminiModel
+                            })
+                        });
+
+                        var result = await response.json();
+                        if (!response.ok) throw new Error(result.message || 'Gagal terhubung ke server.');
+
+                        var formattedText = result.advice;
+                        formattedText = formattedText.replace(/\n/g, '<br>');
+                        formattedText = formattedText.replace(/\*\*(.*?)\*\*/g, '<strong class="text-white text-base">$1</strong>');
+                        formattedText = formattedText.replace(/\* (.*?)(?=<br>|$)/g, '<li>$1</li>');
+                        formattedText = formattedText.replace(/<li>/g, '<li class="ml-4 list-disc marker:text-purple-400 mb-1">');
+                        
+                        responseDiv.innerHTML = formattedText;
+                        responseDiv.classList.remove('hidden');
+                        currentAIAdvice = result.advice;
+
+                    } catch (error) {
+                        console.error("Error fetching Gemini advice:", error);
+                        errorDiv.textContent = 'Error: ' + error.message;
+                    } finally {
+                        loadingSpinner.classList.add('hidden');
+                        loadingSpinner.classList.remove('flex');
+                        geminiButton.disabled = false;
+                        geminiButton.innerHTML = originalText;
+                    }
+                });
+            }
+
+            // --- 5. CARI RUMAH SAKIT ---
+            var hospitalButton = document.getElementById('find-hospital-button');
+            if (hospitalButton) {
+                var hospitalStatus = document.getElementById('hospital-status');
+
+                hospitalButton.addEventListener('click', function() {
+                    if (!navigator.geolocation) {
+                        hospitalStatus.textContent = 'Error: Geolocation tidak didukung oleh browser Anda.';
+                        return;
+                    }
+
+                    hospitalStatus.textContent = 'Mendeteksi lokasi Anda... (Mohon izinkan akses lokasi)';
+                    hospitalButton.disabled = true;
+                    var originalText = hospitalButton.innerHTML;
+                    hospitalButton.innerHTML = 'Mencari...';
+
+                    function success(position) {
+                        var latitude  = position.coords.latitude;
+                        var longitude = position.coords.longitude;
+                        var mapUrl = 'https://www.google.com/maps/search/rumah+sakit/@' + latitude + ',' + longitude + ',14z'; 
+
+                        hospitalStatus.innerHTML = 
+                            '<a href="' + mapUrl + '" target="_blank" rel="noopener noreferrer" ' +
+                               'class="text-emerald-400 font-bold hover:underline flex items-center justify-center">' +
+                               '<span>✓ Lokasi Ditemukan! Klik di sini.</span>' +
+                            '</a>';
+                        hospitalButton.disabled = false;
+                        hospitalButton.innerHTML = originalText;
+                    }
+
+                    function error(err) {
+                        console.warn('ERROR(' + err.code + '): ' + err.message);
+                        hospitalStatus.textContent = 'Error: Tidak dapat mengambil lokasi. Pastikan Anda mengizinkan akses.';
+                        hospitalButton.disabled = false;
+                        hospitalButton.innerHTML = originalText;
+                    }
+
+                    navigator.geolocation.getCurrentPosition(success, error);
+                });
+            }
+        });
+
+        // Helper functions outside DOMContentLoaded for onClick access
+        async function loadUserData(userId) {
+            try {
+                var response = await fetch('/get_user_details/' + userId);
+                if (!response.ok) throw new Error('User data not found');
+                
+                var data = await response.json();
+                
+                document.getElementById('Name').value = data.Name;
+                document.getElementById('Age').value = data.Age;
+                document.getElementById('Sex').value = data.Sex;
+                document.getElementById('ChestPainType').value = data.ChestPainType;
+                document.getElementById('RestingBP').value = data.RestingBP;
+                document.getElementById('Cholesterol').value = data.Cholesterol;
+                document.getElementById('FastingBS').value = data.FastingBS;
+                document.getElementById('RestingECG').value = data.RestingECG;
+                document.getElementById('MaxHR').value = data.MaxHR;
+                document.getElementById('ExerciseAngina').value = data.ExerciseAngina;
+                document.getElementById('Oldpeak').value = data.Oldpeak;
+                document.getElementById('ST_Slope').value = data.ST_Slope;
+                
+                document.getElementById('Height').value = data.Height || '';
+                document.getElementById('Weight').value = data.Weight || '';
+                document.getElementById('FamilyHistory').value = data.FamilyHistory || 'Tidak';
+                document.getElementById('SmokingStatus').value = data.SmokingStatus || 'Tidak Pernah';
+                document.getElementById('AlcoholIntake').value = data.AlcoholIntake || 'Tidak Pernah';
+                document.getElementById('PhysicalActivity').value = data.PhysicalActivity || 'Jarang';
+
+                // Manually close modal
+                var loadModal = document.getElementById('load-modal');
+                var modalContent = loadModal.querySelector('.modal-content');
+                modalContent.classList.add('scale-95');
+                loadModal.classList.add('opacity-0', 'pointer-events-none');
+                setTimeout(() => loadModal.classList.add('hidden'), 300);
+
+            } catch (error) {
+                alert('Error loading user data: ' + error.message);
+            }
+        }
+
+        async function deleteUserData(userId, buttonElement) {
+            if (!window.confirm("Apakah Anda yakin ingin menghapus data pasien ini?")) return;
+
+            var originalText = buttonElement.innerHTML;
+            buttonElement.innerHTML = '...';
+            buttonElement.disabled = true;
+
+            try {
+                var response = await fetch('/delete_user/' + userId, { method: 'POST' });
+                var result = await response.json();
+                if (response.ok) {
+                    // Smoothly remove element
+                    var row = buttonElement.closest('.flex').parentNode;
+                    row.style.opacity = '0';
+                    setTimeout(() => row.remove(), 300);
+                } else {
+                    throw new Error(result.message);
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                buttonElement.innerHTML = originalText;
+                buttonElement.disabled = false;
+            }
+        }
+    </script>
+</body>
+</html>
